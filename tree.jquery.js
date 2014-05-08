@@ -2255,11 +2255,11 @@ limitations under the License.
 
     DragAndDropHandler.prototype.mouseStart = function(position_info) {
       var offset;
-      this.refresh();
       offset = $(position_info.target).offset();
       this.drag_element = new DragElement(this.current_item.node, position_info.page_x - offset.left, position_info.page_y - offset.top, this.tree_widget.element);
       this.is_dragging = true;
       this.current_item.$element.addClass('jqtree-moving');
+      this.refresh();
       return true;
     };
 

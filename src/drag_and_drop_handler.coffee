@@ -24,8 +24,6 @@ class DragAndDropHandler
         return (@current_item != null)
 
     mouseStart: (position_info) ->
-        @refresh()
-
         offset = $(position_info.target).offset()
 
         @drag_element = new DragElement(
@@ -37,6 +35,9 @@ class DragAndDropHandler
 
         @is_dragging = true
         @current_item.$element.addClass('jqtree-moving')
+
+        @refresh()
+
         return true
 
     mouseDrag: (position_info) ->
