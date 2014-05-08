@@ -2445,7 +2445,7 @@ limitations under the License.
         left: offset.left,
         top: offset.top,
         right: offset.left + this.tree_widget.element.width(),
-        bottom: offset.top + this.tree_widget.element.height() + 16
+        bottom: offset.top + this.tree_widget.element.height() + 80
       };
     };
 
