@@ -316,6 +316,9 @@ class Node
 
         return false
 
+    isOpen: () ->
+        return !(@element.classList.contains('jqtree-closed'))
+
     getLevel: ->
         level = 0
         node = this
