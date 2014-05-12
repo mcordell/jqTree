@@ -7,6 +7,12 @@ class DragAndDropHandler
         @hit_areas = []
         @is_dragging = false
         @current_item = null
+        @current_item_area = null;
+
+    hideMovingArea: () ->
+        $('.jqtree-moving').hide()
+        @refresh()
+
 
     mouseCapture: (position_info) ->
         $element = $(position_info.target)
@@ -37,28 +43,30 @@ class DragAndDropHandler
         @current_item.$element.addClass('jqtree-moving')
 
         @refresh()
-
         return true
 
     mouseDrag: (position_info) ->
         @drag_element.move(position_info.page_x, position_info.page_y)
-
+        #console.log("X: "+position_info.page_x+" Y: "+position_info.page_y)
         area = @findHoveredArea(position_info.page_x, position_info.page_y)
-        can_move_to = @canMoveToArea(area)
-
-        if can_move_to and area
-            if @hovered_area != area
-                @hovered_area = area
-
-                # If this is a closed folder, start timer to open it
-                if @mustOpenFolderTimer(area)
-                    @startOpenFolderTimer(area.node)
-
-                @updateDropHint()
+        leaving = @leavingMovingArea(position_info.page_x, position_info.page_y)
+        leavingGhost = @leavingGhostArea(position_info.page_x, position_info.page_y)
+        if @inMovingArea(position_info.page_x, position_info.page_y)
+            can_move_to = false
         else
-            @removeHover()
-            @removeDropHint()
-            @stopOpenFolderTimer()
+            can_move_to = @canMoveToArea(area)
+
+
+        if leaving
+            @hovered_area = @findAreaWhenLeaving(leaving, position_info.page_x, position_info.page_y)
+            @hideMovingArea()
+            @updateDropHint()
+            @refresh()
+        else if (leavingGhost)
+            @hovered_area = @findAreaWhenLeaving(leavingGhost, position_info.page_x, position_info.page_y, true)
+            @updateDropHint()
+            @refresh()
+
 
         return true
 
@@ -72,6 +80,38 @@ class DragAndDropHandler
         else
             return true
 
+    inMovingArea: (x,y) ->
+        moving_area_top = $('.jqtree-moving').offset().top
+        moving_area_bottom = $('.jqtree-moving').height() + moving_area_top
+        if not $('.jqtree-moving').is(':visible')
+            return false
+        if ( y > moving_area_top && y < moving_area_bottom)
+            return true
+        else
+            return false
+
+    leavingGhostArea: (x,y) ->
+        if not $('.jqtree-ghost').is(':visible')
+            return false
+        ghost_top = $('.jqtree-ghost').offset().top
+        ghost_bottom = $('.jqtree-ghost').height() + ghost_top
+        if (y > ghost_bottom)
+            return -1
+        if (y < ghost_top)
+            return 1
+        return false
+
+    leavingMovingArea: (x,y) ->
+        if not $('.jqtree-moving').is(':visible')
+            return false
+        moving_area_top = $('.jqtree-moving').offset().top
+        moving_area_bottom = $('.jqtree-moving').height() + moving_area_top
+        if (y > moving_area_bottom+10)
+            return -1
+        if (y < moving_area_top+10)
+            return 1
+        return false
+
     mouseStop: (position_info) ->
         @moveItem(position_info)
         @clear()
@@ -80,6 +120,7 @@ class DragAndDropHandler
         @removeHitAreas()
 
         if @current_item
+            @current_item.$element.show()
             @current_item.$element.removeClass('jqtree-moving')
             @current_item = null
 
@@ -117,6 +158,48 @@ class DragAndDropHandler
             @getTreeDimensions().bottom
         )
         @hit_areas = hit_areas_generator.generate()
+
+    findAreaWhenLeaving: (leaving, x, y, ghost) ->
+        dimensions = @getTreeDimensions()
+
+        if (
+            x < dimensions.left or
+            y < dimensions.top or
+            x > dimensions.right or
+            y > dimensions.bottom
+        )
+            return null
+
+        low = 0
+        high = @hit_areas.length
+        while (low < high)
+            mid = (low + high) >> 1
+            area = @hit_areas[mid]
+
+            if y < area.top
+                high = mid
+            else if y > area.bottom
+                low = mid + 1
+            else
+                areaId = mid
+                if (ghost && leaving == 1 && area.position == Position.INSIDE)
+                    areaBefore = @hit_areas[areaId-1]
+                    if (areaBefore.position == Position.INSIDE)
+                        return areaBefore
+                while (ghost && leaving == 1 && areaId > 0 && area.position != Position.INSIDE)
+                    areaId--
+                    area = @hit_areas[areaId]
+                while (ghost && leaving == -1 && areaId < @hit_areas.length && area.position != Position.AFTER)
+                    areaId++
+                    area = @hit_areas[areaId]
+                while (leaving == 1 && areaId > 0 && area.position != Position.AFTER)
+                    areaId--
+                    area = @hit_areas[areaId]
+                while (leaving == -1 && areaId < @hit_areas.length && area.position != Position.AFTER)
+                    areaId++
+                    area = @hit_areas[areaId]
+                return area
+        return null
 
     findHoveredArea: (x, y) ->
         dimensions = @getTreeDimensions()
@@ -453,7 +536,8 @@ class GhostDropHint
         @$element = $element
 
         @node = node
-        @$ghost = $('<li class="jqtree_common jqtree-ghost"><span class="jqtree_common jqtree-circle"></span><span class="jqtree_common jqtree-line"></span></li>')
+        height =  $('.jqtree-moving').height()
+        @$ghost = $('<li style = "height:'+height+'px;" class="jqtree_common jqtree-ghost"><span class="jqtree_common jqtree-circle"></span><span class="jqtree_common jqtree-line"></span></li>')
 
         if position == Position.AFTER
             @moveAfter()
