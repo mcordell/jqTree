@@ -184,9 +184,9 @@ class DragAndDropHandler
                 areaId = mid
                 if (ghost && leaving == 1 && area.position == Position.INSIDE)
                     areaBefore = @hit_areas[areaId-1]
-                    if (areaBefore.position == Position.INSIDE)
+                    if (areaBefore.position == Position.INSIDE && areaBefore.node.isOpen())
                         return areaBefore
-                while (ghost && leaving == 1 && areaId > 0 && area.position != Position.INSIDE)
+                while (ghost && leaving == 1 && areaId > 0 && area.position != Position.AFTER)
                     areaId--
                     area = @hit_areas[areaId]
                 while (ghost && leaving == -1 && areaId < @hit_areas.length && area.position != Position.AFTER)
