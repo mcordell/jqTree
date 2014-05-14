@@ -1,4 +1,5 @@
 class DragAndDropHandler
+
     constructor: (tree_widget) ->
         @tree_widget = tree_widget
 
@@ -8,6 +9,7 @@ class DragAndDropHandler
         @is_dragging = false
         @current_item = null
         @current_item_area = null;
+        @debugHits = false
 
     hideMovingArea: () ->
         $('.jqtree-moving').hide()
@@ -158,6 +160,16 @@ class DragAndDropHandler
             @getTreeDimensions().bottom
         )
         @hit_areas = hit_areas_generator.generate()
+
+        if (@debugHits)
+            for area in @hit_areas
+                switch (area.position)
+                    when 2 then position = 'After'
+                    when 3 then position = 'Inside'
+                    when 1 then position = 'Before'
+                    when 4 then position = 'None'
+
+                console.log(area.top, area.bottom, area.node.name, position)
 
     findAreaWhenLeaving: (leaving, x, y, ghost) ->
         dimensions = @getTreeDimensions()
