@@ -701,6 +701,12 @@ limitations under the License.
       return false;
     };
 
+    Node.prototype.isOpen = function() {
+      if (this.element && this.element.classList) {
+        return !(this.element.classList.contains('jqtree-closed'));
+      }
+    };
+
     Node.prototype.getLevel = function() {
       var level, node;
       level = 0;
@@ -2236,6 +2242,9 @@ limitations under the License.
       this.is_dragging = false;
       this.current_item = null;
       this.current_item_area = null;
+      this.debugHits = false;
+      this.previousY = null;
+      this.direction = null;
     }
 
     DragAndDropHandler.prototype.hideMovingArea = function() {
@@ -2270,22 +2279,25 @@ limitations under the License.
     };
 
     DragAndDropHandler.prototype.mouseDrag = function(position_info) {
-      var area, can_move_to, leaving, leavingGhost;
+      var area, leaving, leavingGhost;
+      if (this.previousY === null) {
+        this.direction = DragAndDropHandler.DOWN;
+      } else if (this.previousY > position_info.page_y) {
+        this.direction = DragAndDropHandler.UP;
+      } else if (this.previousY < position_info.page_y) {
+        this.direction = DragAndDropHandler.DOWN;
+      }
+      this.previousY = position_info.page_y;
       this.drag_element.move(position_info.page_x, position_info.page_y);
       area = this.findHoveredArea(position_info.page_x, position_info.page_y);
       leaving = this.leavingMovingArea(position_info.page_x, position_info.page_y);
       leavingGhost = this.leavingGhostArea(position_info.page_x, position_info.page_y);
-      if (this.inMovingArea(position_info.page_x, position_info.page_y)) {
-        can_move_to = false;
-      } else {
-        can_move_to = this.canMoveToArea(area);
-      }
       if (leaving) {
         this.hovered_area = this.findAreaWhenLeaving(leaving, position_info.page_x, position_info.page_y);
         this.hideMovingArea();
         this.updateDropHint();
         this.refresh();
-      } else if (leavingGhost) {
+      } else if (leavingGhost && leavingGhost === this.direction) {
         this.hovered_area = this.findAreaWhenLeaving(leavingGhost, position_info.page_x, position_info.page_y, true);
         this.updateDropHint();
         this.refresh();
@@ -2321,11 +2333,14 @@ limitations under the License.
 
     DragAndDropHandler.prototype.leavingGhostArea = function(x, y) {
       var ghost_bottom, ghost_top;
-      if (!$('.jqtree-ghost').is(':visible')) {
+      if (!$(".jqtree-ghost").is(":visible")) {
         return false;
       }
-      ghost_top = $('.jqtree-ghost').offset().top;
-      ghost_bottom = $('.jqtree-ghost').height() + ghost_top;
+      ghost_top = $(".jqtree-ghost").offset().top;
+      ghost_bottom = $(".jqtree-ghost").height() + ghost_top;
+      if (y > ghost_top && y < ghost_bottom) {
+        return false;
+      }
       if (y > ghost_bottom) {
         return -1;
       }
@@ -2337,15 +2352,15 @@ limitations under the License.
 
     DragAndDropHandler.prototype.leavingMovingArea = function(x, y) {
       var moving_area_bottom, moving_area_top;
-      if (!$('.jqtree-moving').is(':visible')) {
+      if (!$(".jqtree-moving").is(":visible")) {
         return false;
       }
-      moving_area_top = $('.jqtree-moving').offset().top;
-      moving_area_bottom = $('.jqtree-moving').height() + moving_area_top;
-      if (y > moving_area_bottom + 10) {
+      moving_area_top = $(".jqtree-moving").offset().top;
+      moving_area_bottom = $(".jqtree-moving").height() + moving_area_top;
+      if (y > moving_area_bottom) {
         return -1;
       }
-      if (y < moving_area_top + 10) {
+      if (y < moving_area_top) {
         return 1;
       }
       return false;
@@ -2397,13 +2412,35 @@ limitations under the License.
     };
 
     DragAndDropHandler.prototype.generateHitAreas = function() {
-      var hit_areas_generator;
+      var area, hit_areas_generator, position, _i, _len, _ref, _results;
       hit_areas_generator = new HitAreasGenerator(this.tree_widget.tree, this.current_item.node, this.getTreeDimensions().bottom);
-      return this.hit_areas = hit_areas_generator.generate();
+      this.hit_areas = hit_areas_generator.generate();
+      if (this.debugHits) {
+        _ref = this.hit_areas;
+        _results = [];
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          area = _ref[_i];
+          switch (area.position) {
+            case 2:
+              position = 'After';
+              break;
+            case 3:
+              position = 'Inside';
+              break;
+            case 1:
+              position = 'Before';
+              break;
+            case 4:
+              position = 'None';
+          }
+          _results.push(console.log(area.top, area.bottom, area.node.name, position));
+        }
+        return _results;
+      }
     };
 
     DragAndDropHandler.prototype.findAreaWhenLeaving = function(leaving, x, y, ghost) {
-      var area, areaBefore, areaId, dimensions, high, low, mid;
+      var area, areaAfter, areaBefore, areaId, dimensions, high, low, mid;
       dimensions = this.getTreeDimensions();
       if (x < dimensions.left || y < dimensions.top || x > dimensions.right || y > dimensions.bottom) {
         return null;
@@ -2419,19 +2456,17 @@ limitations under the License.
           low = mid + 1;
         } else {
           areaId = mid;
-          if (ghost && leaving === 1 && area.position === Position.INSIDE) {
+          if (ghost && leaving === 1 && area.position !== Position.AFTER) {
             areaBefore = this.hit_areas[areaId - 1];
-            if (areaBefore.position === Position.INSIDE) {
+            if (areaBefore.position !== Position.AFTER) {
               return areaBefore;
             }
           }
-          while (ghost && leaving === 1 && areaId > 0 && area.position !== Position.INSIDE) {
-            areaId--;
-            area = this.hit_areas[areaId];
-          }
-          while (ghost && leaving === -1 && areaId < this.hit_areas.length && area.position !== Position.AFTER) {
-            areaId++;
-            area = this.hit_areas[areaId];
+          if (ghost && leaving === -1 && area.position !== Position.AFTER) {
+            areaAfter = this.hit_areas[areaId + 1];
+            if (areaAfter.position !== Position.AFTER) {
+              return area;
+            }
           }
           while (leaving === 1 && areaId > 0 && area.position !== Position.AFTER) {
             areaId--;
@@ -2554,6 +2589,10 @@ limitations under the License.
 
   })();
 
+  DragAndDropHandler.UP = 1;
+
+  DragAndDropHandler.DOWN = -1;
+
   VisibleNodeIterator = (function() {
     function VisibleNodeIterator(tree) {
       this.tree = tree;
@@ -2654,38 +2693,26 @@ limitations under the License.
       var top;
       top = this.getTop($element);
       if (node === this.current_node) {
-        this.addPosition(node, Position.NONE, top);
-      } else {
-        this.addPosition(node, Position.INSIDE, top);
-      }
-      if (next_node === this.current_node || node === this.current_node) {
         return this.addPosition(node, Position.NONE, top);
       } else {
+        this.addPosition(node, Position.INSIDE, top);
         return this.addPosition(node, Position.AFTER, top);
       }
     };
 
     HitAreasGenerator.prototype.handleOpenFolder = function(node, $element) {
       if (node === this.current_node) {
-        false;
+        return false;
       }
-      if (node.children[0] !== this.current_node) {
-        this.addPosition(node, Position.INSIDE, this.getTop($element));
-      }
+      this.addPosition(node, Position.INSIDE, this.getTop($element));
       return true;
     };
 
     HitAreasGenerator.prototype.handleClosedFolder = function(node, next_node, $element) {
       var top;
       top = this.getTop($element);
-      if (node === this.current_node) {
-        return this.addPosition(node, Position.NONE, top);
-      } else {
-        this.addPosition(node, Position.INSIDE, top);
-        if (next_node !== this.current_node) {
-          return this.addPosition(node, Position.AFTER, top);
-        }
-      }
+      this.addPosition(node, Position.INSIDE, top);
+      return this.addPosition(node, Position.AFTER, top);
     };
 
     HitAreasGenerator.prototype.handleFirstNode = function(node, $element) {
