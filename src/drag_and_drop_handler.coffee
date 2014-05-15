@@ -11,12 +11,19 @@ class DragAndDropHandler
         @current_item_area = null;
         @debugHits = false
         @previousY = null
+        @previousX = null
         @direction = null
+        @horizontal_direction = null
+        @horizontal_cont = 0
+        @pervious_area = null
 
     hideMovingArea: () ->
         $('.jqtree-moving').hide()
         @refresh()
 
+    bumpElement: (element) ->
+        console.log('Bumping element')
+        $(element).addClass('bumped')
 
     mouseCapture: (position_info) ->
         $element = $(position_info.target)
@@ -48,29 +55,81 @@ class DragAndDropHandler
 
         @refresh()
         return true
-
     mouseDrag: (position_info) ->
-      if @previousY is null
-        @direction = DragAndDropHandler.DOWN
-      else if @previousY > position_info.page_y
-        @direction = DragAndDropHandler.UP
-      else if @previousY < position_info.page_y
-        @direction = DragAndDropHandler.DOWN
-      @previousY = position_info.page_y
-      @drag_element.move position_info.page_x, position_info.page_y
-      area = @findHoveredArea(position_info.page_x, position_info.page_y)
-      leaving = @leavingMovingArea(position_info.page_x, position_info.page_y)
-      leavingGhost = @leavingGhostArea(position_info.page_x, position_info.page_y)
-      if leaving
-        @hovered_area = @findAreaWhenLeaving(leaving, position_info.page_x, position_info.page_y)
-        @hideMovingArea()
-        @updateDropHint()
-        @refresh()
-      else if (leavingGhost && leavingGhost is @direction)
-          @hovered_area = @findAreaWhenLeaving(leavingGhost, position_info.page_x, position_info.page_y, true)
-          @updateDropHint()
-          @refresh()
-      return true
+        rightmove = false
+        if (@previousY == null)
+            @direction = null
+        else if (@previousY > position_info.page_y)
+            @direction = DragAndDropHandler.UP
+        else if (@previousY < position_info.page_y)
+            @direction = DragAndDropHandler.DOWN
+
+        if (@previousX == null)
+            area = @previousX = position_info.page_x
+        else if (@previousX+10 < position_info.page_x)
+            rightmove = true
+            console.log('Triggered')
+        else
+            console.log(@previousX, position_info.page_x)
+
+        #@triggeringRightMove(position_info.page_x, position_info.page_y)
+
+       # @previousX = position_info.page_x
+        @previousY = position_info.page_y
+        @drag_element.move(position_info.page_x, position_info.page_y)
+
+
+        if rightmove
+            area = @findAreaRightToggle(position_info.page_x, position_info.page_y)
+            if (area.position == Position.INSIDE && area.node.hasChildren() && !area.node.isOpen())
+                @tree_widget._openNode(
+                    area.node,
+                    @tree_widget.options.slide,
+                    =>
+                        @refresh()
+                )
+                @previousX = position_info.page_x
+            else
+                el = $('.jqtree-ghost')
+                if (el.is(':visible'))
+                    @bumpElement(el)
+                    @hovered_area = area
+                el = $('.jqtree-moving')
+                if (el.is(':visible'))
+                    @bumpElement(el)
+                    @hovered_area = area
+        else
+            #console.log("X: "+position_info.page_x+" Y: "+position_info.page_y)
+            area = @findHoveredArea(position_info.page_x, position_info.page_y)
+            leaving = @leavingMovingArea(position_info.page_x, position_info.page_y)
+            leavingGhost = @leavingGhostArea(position_info.page_x, position_info.page_y)
+            #if @inMovingArea(position_info.page_x, position_info.page_y)
+            #    console.log("I can't let you do that dave.");
+            #    can_move_to = false
+            #else
+            #    can_move_to = @canMoveToArea(area)
+
+
+            if leaving
+                @hovered_area = @findAreaWhenLeaving(leaving, position_info.page_x, position_info.page_y)
+                @hideMovingArea()
+                @updateDropHint()
+                @refresh()
+                @horizontal_cont = 0
+                console.log('leave move done')
+            else if (leavingGhost)
+                #console.log('Leaving Ghost' + leavingGhost + "Direction " + @direction)
+                if (leavingGhost == @direction)
+                    @hovered_area = @findAreaWhenLeaving(leavingGhost, position_info.page_x, position_info.page_y, true)
+                    if (@hovered_area != @previous_area)
+                        @previous_area = @hovered_area
+                        @updateDropHint()
+                        @refresh()
+                        @previousX = position_info.page_x
+                        console.log('Ghost move done')
+
+
+        return true
 
     canMoveToArea: (area) ->
         if not area
@@ -91,6 +150,15 @@ class DragAndDropHandler
             return true
         else
             return false
+
+    triggeringRightMove: (x,y) ->
+        if not $('.jqtree-ghost').is(':visible')
+            return false
+        ghost_left = $('.jqtree-ghost').offset().left
+        console.log('Ghost_left'+ghost_left + " X:" + x)
+        if (x > ghost_left + 20)
+            console.log('Triggered!!')
+        return false
 
     leavingGhostArea: (x,y) ->
         return false  unless $(".jqtree-ghost").is(":visible")
@@ -115,6 +183,8 @@ class DragAndDropHandler
         @removeHover()
         @removeDropHint()
         @removeHitAreas()
+        @previousX = null
+        @previousY = null
 
         if @current_item
             @current_item.$element.show()
@@ -133,6 +203,7 @@ class DragAndDropHandler
 
             if @is_dragging
                 @current_item.$element.addClass('jqtree-moving')
+
 
     removeHitAreas: ->
         @hit_areas = []
@@ -189,17 +260,57 @@ class DragAndDropHandler
                 low = mid + 1
             else
                 areaId = mid
-                if ghost and leaving is 1 and area.position isnt Position.AFTER
-                    areaBefore = @hit_areas[areaId - 1]
-                    return areaBefore  if areaBefore.position isnt Position.AFTER
-                if ghost and leaving is -1 and area.position isnt Position.AFTER
-                    areaAfter = @hit_areas[areaId + 1]
-                    return area  if areaAfter.position isnt Position.AFTER
-                while leaving is 1 and areaId > 0 and area.position isnt Position.AFTER
+                if (ghost && leaving == 1 && area.position != Position.AFTER)
+                    areaBefore = @hit_areas[areaId-1]
+                    if (areaBefore.position != Position.AFTER)
+                        console.log('Special Return up' + area.position + " " + area.top)
+                        return areaBefore
+                if (leaving == -1 && area.position != Position.AFTER)
+                    areaAfter = @hit_areas[areaId+1]
+                    if (areaAfter.position != Position.AFTER)
+                        if ghost
+                            console.log('GHOST Special Return down: ' + area.position + " " + area.top)
+                            return area
+                        else
+                            return areaAfter
+                while (leaving == 1 && areaId > 0 && area.position != Position.AFTER)
+                    console.log('Position = ' + area.position + ' subtracting')
                     areaId--
                     area = @hit_areas[areaId]
-                while leaving is -1 and areaId < @hit_areas.length and area.position isnt Position.AFTER
+                while (leaving == -1 && areaId < @hit_areas.length && area.position != Position.AFTER)
+                    console.log('Position = ' + area.position + ' adding')
                     areaId++
+                    area = @hit_areas[areaId]
+                console.log('Returning '+ area.position + " " + area.top)
+                return area
+        return null
+
+    findAreaRightToggle: (x, y) ->
+        dimensions = @getTreeDimensions()
+
+        if (
+            x < dimensions.left or
+            y < dimensions.top or
+            x > dimensions.right or
+            y > dimensions.bottom
+        )
+            return null
+
+        low = 0
+        high = @hit_areas.length
+        while (low < high)
+            mid = (low + high) >> 1
+            area = @hit_areas[mid]
+
+            if y < area.top
+                high = mid
+            else if y > area.bottom
+                low = mid + 1
+            else
+                areaId = mid
+                while (areaId > 0 && area.position != Position.INSIDE)
+                    #console.log('Position = ' + area.position + ' subtracting')
+                    areaId--
                     area = @hit_areas[areaId]
                 return area
         return null
@@ -315,7 +426,8 @@ class DragAndDropHandler
 
 DragAndDropHandler.UP = 1
 DragAndDropHandler.DOWN = -1
-
+DragAndDropHandler.RIGHT = 1
+DragAndDropHandler.LEFT = -1
 class VisibleNodeIterator
     constructor: (tree) ->
         @tree = tree
@@ -500,7 +612,9 @@ class DragElement
         @offset_x = offset_x
         @offset_y = offset_y
 
-        @$element = $("<span class=\"jqtree-title jqtree-dragging\">#{ node.name }</span>")
+        @$element = $("<div class=\"jqtree-title jqtree-dragging\"></div>")
+        @$element.append($(node.element).clone())
+        #@$element = $("<span class=\"jqtree-title jqtree-dragging\">#{ node.name }</span>")
         @$element.css("position", "absolute")
         $tree.append(@$element)
 
