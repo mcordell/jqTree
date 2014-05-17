@@ -100,6 +100,7 @@ class DragAndDropHandler
             @hideMovingArea()
             @updateDropHint()
             @refresh()
+            @horizontal_options = null
            #console.log('leave move done')
         else if (leavingGhost)
            #console.log('Leaving Ghost' + leavingGhost + "Direction " + @direction)
@@ -110,15 +111,12 @@ class DragAndDropHandler
                     @updateDropHint()
                     @refresh()
                     @previousX = current_x
+                    @horizontal_options = null
                    #console.log('Ghost move done')
         else if horizontalDirection == DragAndDropHandler.RIGHT
-            #console.log('Right')
-            #@printCursorAndAround()
             rightBumpArea = @tryRightBump(el)
             if rightBumpArea
-               #console.log('RIGHT BUMP')
                 if rightBumpArea.position == Position.AFTER
-                   #console.log('matches after')
                     if $('.jqtree-moving').is(':visible')
                         @hideMovingArea()
                     @hovered_area = rightBumpArea
@@ -129,34 +127,17 @@ class DragAndDropHandler
                     @bumpElement(el)
                     @hovered_area = rightBumpArea
                     @previousX = current_x
-
-#            area = @findAreaRightToggle(current_x, current_y)
-#            if (area && area.position == Position.INSIDE && area.node != @current_item.node && area.node.hasChildren() && !area.node.isOpen())
-#                @openNodeFolder(area.node)
-#                @previousX = current_x
-#                @hovered_area = area
-#                @updateDropHint();
-#            else if @canBump(el)
-#                @bumpElement(el)
-#                @hovered_area = area
+                console.log('after move, hovered area is', @hovered_area)
         else if horizontalDirection == DragAndDropHandler.LEFT
-            #@printCursorAndAround()
-            #console.log('LEFT')
-            el = if $('.jqtree-moving').is(':visible') then $('.jqtree-moving') else $('.jqtree-ghost')
+            leftBumpArea = @tryLeftBump()
+            if leftBumpArea
+                if $('.jqtree-moving').is(':visible')
+                    @hideMovingArea()
+                @hovered_area = leftBumpArea
+                @updateDropHint();
+                @pervious_x = current_x
+                @refresh()
 
-            if $('.bumped').is(':visible')
-                @debumpElement()
-            else
-                leftBump = @tryLeftBump(el)
-                if leftBump
-                    #console.log('leftBumping')
-                    @hovered_area = leftBump
-                    @pervious_x = current_x
-                    @refresh()
-                    if $('.jqtree-moving').is(':visible')
-                        el.addClass('leftBumped')
-                    else
-                        @updateDropHint();
         return true
 
     openNodeFolder: (node) ->
@@ -185,69 +166,24 @@ class DragAndDropHandler
            console.log(hit_area.node.name, hit_area.top, hit_area.bottom, hit_area.position, hit_area.level)
 
     tryRightBump: ()->
-        if (!@horizontal_options)
+        if !@horizontal_options
             @horizontal_options = @generateHorizontalMoveOptions()
-            @horizontal_options.print()
+        @horizontal_options.print()
 
-        if $('.jqtree-moving').is(':visible')
-            [cursorPosition,index] = @findAreaForPlaceholder($('.jqtree-moving'))
-            previous = @hit_areas[index-1]
-            if (previous.position == Position.AFTER && (cursorPosition.position == Position.NONE || cursorPosition.position == Position.INSIDE))
-               #console.log('swapping')
-                cursorPosition = previous
-                previous = @hit_areas[index-2]
-        else
-            cursorPosition= @hovered_area
-            if (!cursorPosition)
-                [cursorPosition, index] = @findAreaForPlaceholder($('.jqtree-ghost'))
-                previous = @hit_areas[index-1]
+        if @horizontal_options.hasRight()
+            right = @horizontal_options.shiftRight()
+            return right
+        return null
 
-            else
-                #@printHitAreas()
-                index = @hit_areas.lastIndexOf(cursorPosition)
-                previous = @hit_areas[index-1]
-                if (!previous)
-                   #console.log('no previous ghost', cursorPosition)
-                    [pre, index] = @findAreaForPlaceholder($('.jqtree-ghost'))
-                    if (pre.level == cursorPosition.level + 1)
-                        previous = pre
-                if (!previous)
-                    previous_index = @hit_areas.length - 1
-                    previous = @hit_areas[previous_index]
-                   #console.log(cursorPosition.top, previous.bottom)
-                    while previous_index >= 0 && previous.bottom >= cursorPosition.top
-                       #console.log(cursorPosition.top, previous.bottom)
-                        previous_index--
-                        previous = @hit_areas[previous_index]
-                    previous = @hit_areas[previous_index-1]
-                   #console.log("PREVIOUS", previous)
+    tryLeftBump: (el) ->
+        if !@horizontal_options
+            @horizontal_options = @generateHorizontalMoveOptions()
+        @horizontal_options.print()
+        if @horizontal_options.hasLeft()
+            left = @horizontal_options.shiftLeft()
+            return left
+        return null
 
-            if (!previous)
-                @printHitAreas()
-                return null
-
-        if (!previous)
-           #console.log('no previous')
-            return null
-        if (previous.position == Position.INSIDE && previous.level == cursorPosition.level - 1)
-           #console.log('no previous')
-            return null
-
-
-
-        if (previous && @hovered_area && previous.level > (@hovered_area.level + 1))
-            return cursorPosition
-
-       #console.log("Cursor bump:", cursorPosition)
-       #console.log("previous bump:", previous)
-        if previous && previous.level == cursorPosition.level    + 1
-           #console.log('Right bumping because the above element is to the right')
-           #console.log('Return right :', previous)
-            return previous
-
-        if previous && (previous.position == Position.INSIDE)
-           #console.log("returning because of inside rule")
-            return previous
 
     findAreaForPlaceholder: (el) ->
         #area = @hovered_area
@@ -259,24 +195,20 @@ class DragAndDropHandler
         #            index++x
         #        return [area,index+1]
         #    return [area,index]
-        if $('.jqtree-moving').hasClass('jqtree-folder') && !$('.jqtree-moving').hasClass('jqtree-closed')
-            [area,index] = @findHoveredAreaWithIndex(el.offset().left, el.offset().top + el.height())
+        #if $('.jqtree-moving').hasClass('jqtree-folder') && !$('.jqtree-moving').hasClass('jqtree-closed')
+        #    [area,index] = @findHoveredAreaWithIndex(el.offset().left, el.offset().top + el.height())
+        #else
+       # if el.hasClass('jqtree-moving')
+        #    [area,index] = @findHoveredAreaWithIndex(el.offset().left, el.offset().top+1)
+       # else
+        if el.hasClass('jqtree-folder') && !el.hasClass('jqtree-closed')
+            placeholder_mid =  el.offset().top + el.height()
         else
-            [area,index] = @findHoveredAreaWithIndex(el.offset().left, el.offset().top+1)
+            placeholder_mid = el.offset().top + (el.height()/2)
+        [area,index] = @findHoveredAreaWithIndex(el.offset().left, placeholder_mid)
 
 
 
-    tryLeftBump: (el) ->
-        [cursorPosition,index] = @findAreaForPlaceholder(el)
-        next = @hit_areas[index+1]
-        if (next.position == Position.NONE)
-            cursorPosition = next
-            next = @hit_areas[index+2]
-        #console.log("Cursor:", cursorPosition)
-        #console.log("Next:", next)
-        if next && next.level == cursorPosition.level - 1 && next.position == Position.AFTER
-            return next
-        return false
 
     canBump: (el) ->
         [cursorPosition,index] = @findAreaForPlaceholder(el)
@@ -335,33 +267,50 @@ class DragAndDropHandler
         #deal with edge case weirdness based on whether it is a ghost
         if($('.jqtree-moving')).is(':visible')
             [area,index] = @findAreaForPlaceholder($('.jqtree-moving'))
-            if area.position == Position.NONE || area.position == Position.INSIDE
+
+            if area.node == @current_item || area.node == @current_item.node
                 index--
                 area = @hit_areas[index]
         if($('.jqtree-ghost')).is(':visible')
             #bumping the top value by 1 helps us land in an "AFTER" area
-            area = this.findHoveredArea($('.jqtree-ghost').offset().left, $('.jqtree-ghost').offset().top + 1)
-            index = @hit_areas.lastIndexOf(area)
+            #area = this.findHoveredArea($('.jqtree-ghost').offset().left, $('.jqtree-ghost').offset().top + 1)
+            #index = @hit_areas.lastIndexOf(area)
+            [area,index] = @findAreaForPlaceholder($('.jqtree-ghost'))
 
-        #if we are already as nested as far right
+        #if we are already as nested as far right as possible
+        if !area
+            return options
         if area.position == Position.INSIDE
             current = @hit_areas[index+1]
             options.setCurrent(current)
         else
             current = area
             options.setCurrent(current)
-            previous = @hit_areas[index--]
+            index--
+            previous = @hit_areas[index]
+            if previous == current
+                console.log('same')
+
             while previous && previous.position == Position.AFTER
                 options.rightPush(previous)
-                previous = @hit_areas[index--]
+                index--
+                previous = @hit_areas[index]
             if previous && previous.position == Position.INSIDE
                 options.rightPush(previous)
 
-        #skip left getting if we are at the first left
+        #skip left setting if we are at the first level currently
         unless current.level == 1
             index = @hit_areas.lastIndexOf(current)
-            next = @hit_areas[index++]
+            index++
+            next = @hit_areas[index]
+
+            #skip through stuff that is the current hit indicator
+            while next.position == Position.NONE || previous == current
+                index++
+                next = @hit_areas[index]
+
             while next && next.position == Position.AFTER
+                index++
                 options.leftPush(next)
                 next = @hit_areas[index++]
 
@@ -377,6 +326,7 @@ class DragAndDropHandler
         @removeHitAreas()
         @previousX = null
         @previousY = null
+        @horizontal_options = null
 
         if @current_item
             @current_item.$element.show()
@@ -509,30 +459,8 @@ class DragAndDropHandler
         return null
 
     findHoveredAreaWithIndex: (x,y) ->
-        dimensions = @getTreeDimensions()
-
-        if (
-            x < dimensions.left or
-            y < dimensions.top or
-            x > dimensions.right or
-            y > dimensions.bottom
-        )
-            return [null,null]
-
-        low = 0
-        high = @hit_areas.length
-        while (low < high)
-            mid = (low + high) >> 1
-            area = @hit_areas[mid]
-
-            if y < area.top
-                high = mid
-            else if y > area.bottom
-                low = mid + 1
-            else
-                return [area, mid]
-
-        return [null,null]
+        hit = @findHoveredArea(x,y)
+        if hit then [hit, @hit_areas.lastIndexOf(hit)] else [null,null]
 
     findHoveredArea: (x, y) ->
         dimensions = @getTreeDimensions()
@@ -754,6 +682,7 @@ class HitAreasGenerator extends VisibleNodeIterator
         # Cannot move inside current item
         # Stop iterating
         return false if node == @current_node
+
         @addPosition(node, Position.INSIDE, @getTop($element), depth)
 
         # Continue iterating
@@ -934,7 +863,7 @@ class HorizontalOptions
         @right_arr.push(area)
 
     leftPush: (area) ->
-        @right_arr.push(area)
+        @left_arr.push(area)
 
     hasLeft: () ->
         return if (@left_arr.length == 0) then false else true
@@ -944,10 +873,14 @@ class HorizontalOptions
 
     print: () ->
         for i in [@left_arr.length - 1..0] by -1
-            console.log("-"+i, @left_arr[i]);
+            if i == 0
+                console.log("-1", @left_arr[i]);
+            else
+                console.log("-" + (i-1), @left_arr[i]);
 
         console.log('Current', @current)
 
         for i in [0..@right_arr.length] by 1
-            console.log("+"+i, @right_arr[i])
+            if @right_arr[i]
+                console.log("+"+ (i + 1), @right_arr[i])
 
