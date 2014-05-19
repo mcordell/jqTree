@@ -2253,7 +2253,6 @@ limitations under the License.
       this.debugHits = false;
       this.previousY = null;
       this.previousX = null;
-      this.direction = null;
       this.horizontal_direction = null;
       this.horizontal_cont = 0;
       this.pervious_area = null;
@@ -2265,8 +2264,10 @@ limitations under the License.
       return this.refresh();
     };
 
-    DragAndDropHandler.prototype.bumpElement = function(element) {
-      return $(element).addClass('bumped');
+    DragAndDropHandler.prototype.bumpPlaceholder = function() {
+      var el;
+      el = $('.jqtree-moving').is(':visible') ? $('.jqtree-moving') : $('.jqtree-ghost');
+      return el.addClass('bumped');
     };
 
     DragAndDropHandler.prototype.debumpElement = function() {
@@ -2303,15 +2304,15 @@ limitations under the License.
     };
 
     DragAndDropHandler.prototype.mouseDrag = function(position_info) {
-      var current_x, current_y, el, horizontalDirection, leaving, leavingGhost, leftBumpArea, rightBumpArea;
+      var current_x, current_y, horizontalDirection, leaving, leavingGhost, verticalDirection;
       current_y = position_info.page_y;
       current_x = position_info.page_x;
       if (this.previousY === null) {
-        this.direction = DragAndDropHandler.NEUTRAL;
+        verticalDirection = DragAndDropHandler.NEUTRAL;
       } else if (this.previousY > current_y) {
-        this.direction = DragAndDropHandler.UP;
+        verticalDirection = DragAndDropHandler.UP;
       } else if (this.previousY < current_y) {
-        this.direction = DragAndDropHandler.DOWN;
+        verticalDirection = DragAndDropHandler.DOWN;
       }
       this.previousY = current_y;
       if (this.previousX === null) {
@@ -2327,100 +2328,84 @@ limitations under the License.
         horizontalDirection = DragAndDropHandler.NEUTRAL;
       }
       this.drag_element.move(current_x, current_y);
-      leaving = this.leavingMovingArea(current_x, current_y);
-      leavingGhost = this.leavingGhostArea(current_x, current_y);
+      leaving = this.leavingArea($('.jqtree-moving'), current_x, current_y);
+      leavingGhost = this.leavingArea($('.jqtree-ghost'), current_x, current_y);
       if (leaving) {
         this.hovered_area = this.findAreaWhenLeaving(leaving, current_x, current_y);
         this.hideMovingArea();
         this.updateDropHint();
         this.refresh();
-        this.horizontal_options = null;
+        this.resetHorizontal(current_x);
       } else if (leavingGhost) {
-        if (leavingGhost === this.direction) {
+        if (leavingGhost === verticalDirection) {
           this.hovered_area = this.findAreaWhenLeaving(leavingGhost, current_x, current_y, true);
           if (this.hovered_area !== this.previous_area) {
             this.previous_area = this.hovered_area;
             this.updateDropHint();
             this.refresh();
-            this.previousX = current_x;
-            this.horizontal_options = null;
+            this.resetHorizontal(current_x);
           }
         }
       } else if (horizontalDirection === DragAndDropHandler.RIGHT) {
-        rightBumpArea = this.tryRightBump(el);
-        if (rightBumpArea) {
-          if (rightBumpArea.position === Position.AFTER) {
-            if ($('.jqtree-moving').is(':visible')) {
-              this.hideMovingArea();
-            }
-            this.hovered_area = rightBumpArea;
-            this.updateDropHint();
-            this.previousX = current_x;
-          } else if (rightBumpArea.position === Position.INSIDE) {
-            el = $('.jqtree-moving').is(':visible') ? $('.jqtree-moving') : $('.jqtree-ghost');
-            this.bumpElement(el);
-            this.hovered_area = rightBumpArea;
-            this.previousX = current_x;
-          }
-          console.log('after move, hovered area is', this.hovered_area);
-        }
+        this.rightMove();
       } else if (horizontalDirection === DragAndDropHandler.LEFT) {
-        leftBumpArea = this.tryLeftBump();
-        if (leftBumpArea) {
-          if ($('.jqtree-moving').is(':visible')) {
-            this.hideMovingArea();
-          }
-          this.hovered_area = leftBumpArea;
-          this.updateDropHint();
-          this.pervious_x = current_x;
-          this.refresh();
-        }
+        this.leftMove();
+        this.refresh();
       }
       return true;
     };
 
-    DragAndDropHandler.prototype.openNodeFolder = function(node) {
-      return this.tree_widget._openNode(node, this.tree_widget.options.slide, (function(_this) {
-        return function() {
-          return _this.refresh();
-        };
-      })(this));
-    };
-
-    DragAndDropHandler.prototype.printCursorAndAround = function() {
-      var cursorPosition, el, index, next, previous, _ref;
-      el = $('.jqtree-moving').is(':visible') ? $('.jqtree-moving') : $('.jqtree-ghost');
-      _ref = this.findAreaForPlaceholder(el), cursorPosition = _ref[0], index = _ref[1];
-      next = this.hit_areas[index + 1];
-      previous = this.hit_areas[index - 1];
-      if (cursorPosition) {
-        console.log("Cursor:", cursorPosition);
-      }
-      if (next) {
-        console.log("Next:", next);
-      }
-      if (previous) {
-        return console.log("previous", previous);
-      }
+    DragAndDropHandler.prototype.resetHorizontal = function(current_x) {
+      this.previousX = current_x;
+      return this.horizontal_options = null;
     };
 
     DragAndDropHandler.prototype.printHitAreas = function() {
-      var hit_area, _i, _len, _ref, _results;
+      var hit_area, position, _i, _len, _ref;
+      console.log('name', 'top', 'bottom', 'position', 'level');
       _ref = this.hit_areas;
-      _results = [];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         hit_area = _ref[_i];
-        _results.push(console.log(hit_area.node.name, hit_area.top, hit_area.bottom, hit_area.position, hit_area.level));
+        switch (hit_area.position) {
+          case 2:
+            position = 'After';
+            break;
+          case 3:
+            position = 'Inside';
+            break;
+          case 1:
+            position = 'Before';
+            break;
+          case 4:
+            position = 'None';
+        }
       }
-      return _results;
+      return console.log(hit_area.node.name, hit_area.top, hit_area.bottom, position, hit_area.level);
     };
 
-    DragAndDropHandler.prototype.tryRightBump = function() {
+    DragAndDropHandler.prototype.rightMove = function(current_x) {
+      var rightMoveArea;
+      rightMoveArea = this.getRightMoveArea();
+      if (rightMoveArea && rightMoveArea.position === Position.AFTER) {
+        if ($('.jqtree-moving').is(':visible')) {
+          this.hideMovingArea();
+        }
+        this.hovered_area = rightMoveArea;
+        this.updateDropHint();
+        return true;
+      } else if (rightMoveArea && rightMoveArea.position === Position.INSIDE) {
+        this.bumpPlaceholder();
+        this.hovered_area = rightMoveArea;
+        return true;
+      }
+      return false;
+    };
+
+    DragAndDropHandler.prototype.getRightMoveArea = function() {
       var right;
       if (!this.horizontal_options) {
         this.horizontal_options = this.generateHorizontalMoveOptions();
       }
-      this.horizontal_options.print();
       if (this.horizontal_options.hasRight()) {
         right = this.horizontal_options.shiftRight();
         return right;
@@ -2428,12 +2413,25 @@ limitations under the License.
       return null;
     };
 
-    DragAndDropHandler.prototype.tryLeftBump = function(el) {
+    DragAndDropHandler.prototype.leftMove = function() {
+      var leftMoveArea;
+      leftMoveArea = this.getLeftMoveArea();
+      if (leftMoveArea) {
+        if ($('.jqtree-moving').is(':visible')) {
+          this.hideMovingArea();
+        }
+        this.hovered_area = leftMoveArea;
+        this.updateDropHint();
+        return true;
+      }
+      return false;
+    };
+
+    DragAndDropHandler.prototype.getLeftMoveArea = function() {
       var left;
       if (!this.horizontal_options) {
         this.horizontal_options = this.generateHorizontalMoveOptions();
       }
-      this.horizontal_options.print();
       if (this.horizontal_options.hasLeft()) {
         left = this.horizontal_options.shiftLeft();
         return left;
@@ -2451,20 +2449,6 @@ limitations under the License.
       return _ref = this.findHoveredAreaWithIndex(el.offset().left, placeholder_mid), area = _ref[0], index = _ref[1], _ref;
     };
 
-    DragAndDropHandler.prototype.canBump = function(el) {
-      var cursorPosition, index, previous, valueToReturn, _ref;
-      _ref = this.findAreaForPlaceholder(el), cursorPosition = _ref[0], index = _ref[1];
-      previous = this.hit_areas[index - 1];
-      valueToReturn = false;
-      if (cursorPosition.position === Position.NONE) {
-        valueToReturn = previous && previous.position === Position.AFTER ? true : false;
-      }
-      if (cursorPosition.position === Position.AFTER && previous && previous.position === Position.INSIDE && previous.level === cursorPosition.level) {
-        valueToReturn = true;
-      }
-      return valueToReturn;
-    };
-
     DragAndDropHandler.prototype.canMoveToArea = function(area) {
       var position_name;
       if (!area) {
@@ -2474,20 +2458,6 @@ limitations under the License.
         return this.tree_widget.options.onCanMoveTo(this.current_item.node, area.node, position_name);
       } else {
         return true;
-      }
-    };
-
-    DragAndDropHandler.prototype.inMovingArea = function(x, y) {
-      var moving_area_bottom, moving_area_top;
-      moving_area_top = $('.jqtree-moving').offset().top;
-      moving_area_bottom = $('.jqtree-moving').height() + moving_area_top;
-      if (!$('.jqtree-moving').is(':visible')) {
-        return false;
-      }
-      if (y > moving_area_top && y < moving_area_bottom) {
-        return true;
-      } else {
-        return false;
       }
     };
 
@@ -2510,18 +2480,18 @@ limitations under the License.
       return false;
     };
 
-    DragAndDropHandler.prototype.leavingMovingArea = function(x, y) {
-      var moving_area_bottom, moving_area_top;
-      if (!$(".jqtree-moving").is(":visible")) {
+    DragAndDropHandler.prototype.leavingArea = function(el, x, y) {
+      var bottom, top;
+      if (!el.is(":visible")) {
         return false;
       }
-      moving_area_top = $(".jqtree-moving").offset().top;
-      moving_area_bottom = $(".jqtree-moving").height() + moving_area_top;
-      if (y > moving_area_bottom) {
-        return -1;
+      top = el.offset().top;
+      bottom = el.height() + top;
+      if (y > bottom) {
+        return DragAndDropHandler.DOWN;
       }
-      if (y < moving_area_top) {
-        return 1;
+      if (y < top) {
+        return DragAndDropHandler.UP;
       }
       return false;
     };
@@ -2585,9 +2555,6 @@ limitations under the License.
       this.removeHover();
       this.removeDropHint();
       this.removeHitAreas();
-      this.previousX = null;
-      this.previousY = null;
-      this.horizontal_options = null;
       if (this.current_item) {
         this.current_item.$element.show();
         this.current_item.$element.removeClass('jqtree-moving');
@@ -2614,7 +2581,10 @@ limitations under the License.
 
     DragAndDropHandler.prototype.clear = function() {
       this.drag_element.remove();
-      return this.drag_element = null;
+      this.drag_element = null;
+      this.previousX = null;
+      this.previousY = null;
+      return this.horizontal_options = null;
     };
 
     DragAndDropHandler.prototype.removeDropHint = function() {
@@ -2628,33 +2598,9 @@ limitations under the License.
     };
 
     DragAndDropHandler.prototype.generateHitAreas = function() {
-      var area, hit_areas_generator, position, _i, _len, _ref, _results;
+      var hit_areas_generator;
       hit_areas_generator = new HitAreasGenerator(this.tree_widget.tree, this.current_item.node, this.getTreeDimensions().bottom);
-      this.hit_areas = hit_areas_generator.generate();
-      if (this.debugHits) {
-        _ref = this.hit_areas;
-        _results = [];
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          area = _ref[_i];
-          switch (area.position) {
-            case 2:
-              _results.push(position = 'After');
-              break;
-            case 3:
-              _results.push(position = 'Inside');
-              break;
-            case 1:
-              _results.push(position = 'Before');
-              break;
-            case 4:
-              _results.push(position = 'None');
-              break;
-            default:
-              _results.push(void 0);
-          }
-        }
-        return _results;
-      }
+      return this.hit_areas = hit_areas_generator.generate();
     };
 
     DragAndDropHandler.prototype.findAreaWhenLeaving = function(leaving, x, y, ghost) {
@@ -2696,33 +2642,6 @@ limitations under the License.
           }
           while (leaving === -1 && areaId < this.hit_areas.length && area.position !== Position.AFTER) {
             areaId++;
-            area = this.hit_areas[areaId];
-          }
-          return area;
-        }
-      }
-      return null;
-    };
-
-    DragAndDropHandler.prototype.findAreaRightToggle = function(x, y) {
-      var area, areaId, dimensions, high, low, mid;
-      dimensions = this.getTreeDimensions();
-      if (x < dimensions.left || y < dimensions.top || x > dimensions.right || y > dimensions.bottom) {
-        return null;
-      }
-      low = 0;
-      high = this.hit_areas.length;
-      while (low < high) {
-        mid = (low + high) >> 1;
-        area = this.hit_areas[mid];
-        if (y < area.top) {
-          high = mid;
-        } else if (y > area.bottom) {
-          low = mid + 1;
-        } else {
-          areaId = mid;
-          while (areaId > 0 && area.position !== Position.INSIDE) {
-            areaId--;
             area = this.hit_areas[areaId];
           }
           return area;
@@ -2840,7 +2759,7 @@ limitations under the License.
         left: offset.left,
         top: offset.top,
         right: offset.left + this.tree_widget.element.width(),
-        bottom: offset.top + this.tree_widget.element.height() + 80
+        bottom: offset.top + this.tree_widget.element.height() + 40
       };
     };
 
