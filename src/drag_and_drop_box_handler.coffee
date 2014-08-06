@@ -75,13 +75,14 @@ class DragAndDropBoxHandler extends DragAndDropHandler
         @drag_element.move(current_x, current_y)
         leaving = @leavingCursorVertically(current_y)
         #vertically leaving the cursor takes precedence over horizontal nesting
-        if leaving && vertical_direction && leaving == vertical_direction
-            @hovered_area = @findAreaWhenLeaving(vertical_direction)
-            #we have to be on a hovered element so move and refresh everything
-            if (@hovered_area)
-                @dragging_cursor.moveTo(@hovered_area, @hit_areas.lastIndexOf(@hovered_area))
-                @refresh()
-                @resetHorizontal(current_x)
+        if vertical_direction && leaving && leaving == vertical_direction
+            verticalArea = @findAreaWhenLeaving(vertical_direction)
+            if verticalArea && @canMoveToArea(verticalArea)
+              @hovered_area = verticalArea
+              @dragging_cursor.moveTo(@hovered_area, @hit_areas.lastIndexOf(@hovered_area))
+              @refresh()
+              @resetHorizontal(current_x)
+              #we have to be on a hovered element so move and refresh everything
 
         else if horizontal_direction == DragAndDropBoxHandler.RIGHT
             @rightMove()
@@ -115,7 +116,7 @@ class DragAndDropBoxHandler extends DragAndDropHandler
 
     rightMove: (current_x) ->
         rightMoveArea = @getRightMoveArea()
-        if rightMoveArea
+        if rightMoveArea && @canMoveToArea(rightMoveArea)
             @hovered_area = rightMoveArea
             if rightMoveArea && rightMoveArea.position == Position.INSIDE
                 @dragging_cursor.bump()
@@ -136,7 +137,7 @@ class DragAndDropBoxHandler extends DragAndDropHandler
 
     leftMove: () ->
         leftMoveArea = @getLeftMoveArea()
-        if leftMoveArea
+        if leftMoveArea && @canMoveToArea(leftMoveArea)
             @hovered_area = leftMoveArea
             @dragging_cursor.moveTo(@hovered_area)
             return true
@@ -198,7 +199,7 @@ class DragAndDropBoxHandler extends DragAndDropHandler
 
     generateHitAreas: ->
         hit_areas_generator = new BoxAreasGenerator(
-            @tree_widget.tree,
+            @tree_widget,
             @current_item.node,
             @getTreeDimensions().bottom,
             @dragging_cursor
@@ -295,10 +296,11 @@ class DragBoxElement extends DragElement
 
 
 class BoxAreasGenerator extends HitAreasGenerator
-    constructor: (tree, current_node, tree_bottom, cursor, group_size_max) ->
+    constructor: (tree_widget, current_node, tree_bottom, cursor, group_size_max) ->
         group_size_max ?= 12
-        super(tree, current_node, tree_bottom, group_size_max)
+        super(tree_widget.tree, current_node, tree_bottom, group_size_max)
         @cursor = cursor
+        @tree_widget = tree_widget
         @current_node = current_node
         @tree_bottom = tree_bottom
 
@@ -312,15 +314,22 @@ class BoxAreasGenerator extends HitAreasGenerator
         @addCursor(hit_areas)
         return hit_areas
 
-    addPosition: (node, position, top) ->
-        area = {
-            top: top
-            node: node
-            position: position
-        }
+    canMoveTo: (node, position) ->
+        if @tree_widget.options.onCanMoveTo
+            position_name = Position.getName(position)
+            return @tree_widget.options.onCanMoveTo(@current_node, node, position_name)
+        else
+            return true
 
-        @positions.push(area)
-        @last_top = top
+    addPosition: (node, position, top) ->
+        if (@canMoveTo(node, position))
+            area = {
+                top: top
+                node: node
+                position: position
+            }
+            @positions.push(area)
+            @last_top = top
 
     handleNode: (node, next_node, $element) ->
         top = @getTop($element)
@@ -429,8 +438,6 @@ class DraggingCursor
         bottom = @$ghost.height() + top
         left = offset.left
         area.top >= top && area.top < bottom && (left <= $(area.node.element).offset().left)
-
-
 
 class HorizontalOptions
     constructor: () ->

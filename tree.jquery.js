@@ -3123,15 +3123,16 @@ limitations under the License.
     };
 
     DragAndDropBoxHandler.prototype.mouseDrag = function(position_info) {
-      var current_x, current_y, horizontal_direction, leaving, vertical_direction, _ref;
+      var current_x, current_y, horizontal_direction, leaving, verticalArea, vertical_direction, _ref;
       current_y = position_info.page_y;
       current_x = position_info.page_x;
       _ref = this.getCurrentDirections(current_x, current_y), horizontal_direction = _ref[0], vertical_direction = _ref[1];
       this.drag_element.move(current_x, current_y);
       leaving = this.leavingCursorVertically(current_y);
-      if (leaving && vertical_direction && leaving === vertical_direction) {
-        this.hovered_area = this.findAreaWhenLeaving(vertical_direction);
-        if (this.hovered_area) {
+      if (vertical_direction && leaving && leaving === vertical_direction) {
+        verticalArea = this.findAreaWhenLeaving(vertical_direction);
+        if (verticalArea && this.canMoveToArea(verticalArea)) {
+          this.hovered_area = verticalArea;
           this.dragging_cursor.moveTo(this.hovered_area, this.hit_areas.lastIndexOf(this.hovered_area));
           this.refresh();
           return this.resetHorizontal(current_x);
@@ -3171,7 +3172,7 @@ limitations under the License.
     DragAndDropBoxHandler.prototype.rightMove = function(current_x) {
       var rightMoveArea;
       rightMoveArea = this.getRightMoveArea();
-      if (rightMoveArea) {
+      if (rightMoveArea && this.canMoveToArea(rightMoveArea)) {
         this.hovered_area = rightMoveArea;
         if (rightMoveArea && rightMoveArea.position === Position.INSIDE) {
           this.dragging_cursor.bump();
@@ -3197,7 +3198,7 @@ limitations under the License.
     DragAndDropBoxHandler.prototype.leftMove = function() {
       var leftMoveArea;
       leftMoveArea = this.getLeftMoveArea();
-      if (leftMoveArea) {
+      if (leftMoveArea && this.canMoveToArea(leftMoveArea)) {
         this.hovered_area = leftMoveArea;
         this.dragging_cursor.moveTo(this.hovered_area);
         return true;
@@ -3259,7 +3260,7 @@ limitations under the License.
 
     DragAndDropBoxHandler.prototype.generateHitAreas = function() {
       var hit_areas_generator;
-      hit_areas_generator = new BoxAreasGenerator(this.tree_widget.tree, this.current_item.node, this.getTreeDimensions().bottom, this.dragging_cursor);
+      hit_areas_generator = new BoxAreasGenerator(this.tree_widget, this.current_item.node, this.getTreeDimensions().bottom, this.dragging_cursor);
       return this.hit_areas = hit_areas_generator.generate();
     };
 
@@ -3393,12 +3394,13 @@ limitations under the License.
   BoxAreasGenerator = (function(_super) {
     __extends(BoxAreasGenerator, _super);
 
-    function BoxAreasGenerator(tree, current_node, tree_bottom, cursor, group_size_max) {
+    function BoxAreasGenerator(tree_widget, current_node, tree_bottom, cursor, group_size_max) {
       if (group_size_max == null) {
         group_size_max = 12;
       }
-      BoxAreasGenerator.__super__.constructor.call(this, tree, current_node, tree_bottom, group_size_max);
+      BoxAreasGenerator.__super__.constructor.call(this, tree_widget.tree, current_node, tree_bottom, group_size_max);
       this.cursor = cursor;
+      this.tree_widget = tree_widget;
       this.current_node = current_node;
       this.tree_bottom = tree_bottom;
     }
@@ -3413,15 +3415,27 @@ limitations under the License.
       return hit_areas;
     };
 
+    BoxAreasGenerator.prototype.canMoveTo = function(node, position) {
+      var position_name;
+      if (this.tree_widget.options.onCanMoveTo) {
+        position_name = Position.getName(position);
+        return this.tree_widget.options.onCanMoveTo(this.current_node, node, position_name);
+      } else {
+        return true;
+      }
+    };
+
     BoxAreasGenerator.prototype.addPosition = function(node, position, top) {
       var area;
-      area = {
-        top: top,
-        node: node,
-        position: position
-      };
-      this.positions.push(area);
-      return this.last_top = top;
+      if (this.canMoveTo(node, position)) {
+        area = {
+          top: top,
+          node: node,
+          position: position
+        };
+        this.positions.push(area);
+        return this.last_top = top;
+      }
     };
 
     BoxAreasGenerator.prototype.handleNode = function(node, next_node, $element) {
