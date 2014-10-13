@@ -382,7 +382,7 @@ class DraggingCursor
     constructor: (element, position) ->
         @$element = element.$element
         @node = element.node
-        height = @$element.height()
+        height = @$element.outerHeight()
         @$ghost = $('<li style = "height:'+height+'px;" class="jqtree_common jqtree-ghost"></li>')
 
     swapGhost: ->
